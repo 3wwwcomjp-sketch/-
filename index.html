@@ -1,0 +1,107 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>リハビリ時間表メーカー</title><style>
+:root{--bg:#f2f5f6;--fg:#1b2a31;--card:#fff;--ac:#0e6674;--on:#fff;--ln:#d3dde0;--pt:#cfe6f7;--ot:#d6f0d8;--st:#fde3c2;--x:#e4e8ea;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#121a1d;--fg:#e4edf0;--card:#1b272c;--ac:#5cc3d2;--on:#0b1316;--ln:#33444a;--pt:#1e4a66;--ot:#245a2b;--st:#6b4a1a;--x:#2a363b}}
+:root[data-theme=dark]{--bg:#121a1d;--fg:#e4edf0;--card:#1b272c;--ac:#5cc3d2;--on:#0b1316;--ln:#33444a;--pt:#1e4a66;--ot:#245a2b;--st:#6b4a1a;--x:#2a363b}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 "BIZ UDPGothic","Hiragino Sans","Noto Sans JP",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;background:var(--card);border-bottom:1px solid var(--ln);position:sticky;top:env(safe-area-inset-top,0px);z-index:3}
+h1{font-size:16px;margin:0 auto 0 0}
+button,select,input{font:inherit;color:inherit;background:var(--card);border:1px solid var(--ln);border-radius:6px;padding:4px 8px}
+button{cursor:pointer}button.p{background:var(--ac);color:var(--on);border-color:var(--ac);font-weight:700}
+button.on{border-color:var(--ac);box-shadow:inset 0 -3px 0 var(--ac)}
+main{padding:12px}.w{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;background:var(--card)}th,td{border:1px solid var(--ln);padding:2px 4px;vertical-align:top;white-space:nowrap}
+.tt td{height:26px;min-width:84px;white-space:normal;font-size:12px}.tt td.t{min-width:44px;color:#6b7c83}
+.pt{background:var(--pt)}.ot{background:var(--ot)}.st{background:var(--st)}.x{background:var(--x)}
+small{display:block;opacity:.75}.hl{outline:3px solid #e67e22;outline-offset:-3px;font-weight:700}.pi{background:var(--card);border-left:4px solid #e67e22;padding:6px 10px;margin:6px 0}.tt td[onclick]{cursor:pointer}.warn{background:var(--card);border-left:4px solid #c0392b;padding:6px 10px;margin-bottom:10px}
+input[type=number]{width:3.4em}input.n{width:7em}h3{margin:14px 0 4px}
+</style></head><body>
+<header><h1>リハビリ時間表メーカー</h1>
+<select id="wd" onchange="st.wd=+this.value;save()"></select>
+<button class="p" onclick="upd()">更新</button> <button onclick="xp(0)">CSV保存</button> <button onclick="xp(1)">コピー</button> <button onclick="bk()">データ保存</button> <button onclick="document.getElementById('ld').click()">データ読込</button><input id=ld type=file accept=".json" hidden onchange="rs(this)">
+<span id="tabs"></span></header>
+<main><div id="msg"></div><div id="v"></div></main>
+<script>
+const TEAMS=["PT-A","PT-B","PT-C","OT-A","OT-B","ST"],S0=540,N=24,WD="日月火水木金土",DS=["PT","OT","ST"];
+let st;try{st=JSON.parse(localStorage.getItem("rehab1"))}catch(e){}
+const P=(id,name,o)=>Object.assign({id,name,PTa:0,PTb:0,OTa:0,OTb:0,STa:0,STb:0,meal:"12:20-13:20",ic:"",bath:"",bd:"",ph:"回復期",cat:"整形",PTs:"",OTs:"",STs:"",note:""},o);
+if(!st)st={wd:new Date().getDay(),view:"全員",tab:"tt",
+staff:[[1,"田中","PT-A"],[2,"佐藤","PT-B"],[3,"鈴木","OT-A"],[4,"高橋","ST"]].map(a=>({id:a[0],name:a[1],team:a[2],off:false,block:"12:00-13:00",target:a[2]=="ST"?8:16})),
+pts:[P(1,"患者A",{PTa:2,PTb:3,OTa:1,OTb:2,bath:"14:00-15:00",bd:"月木",cat:"脳血管"}),P(2,"患者B",{PTa:3,PTb:3,OTa:2,OTb:2,STa:1,STb:2,ph:"急性期",cat:"廃用"}),P(3,"患者C",{PTa:2,PTb:4,note:"疼痛あり"}),P(4,"患者D",{OTa:2,OTb:3,STa:2,STb:3,cat:"脳血管"})]};
+st.pts.forEach(p=>{if(p.meal=="11:40-12:40")p.meal="12:20-13:20"});
+const save=()=>{try{localStorage.setItem("rehab1",JSON.stringify(st))}catch(e){}};
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+const slots=s=>{const r=new Set;String(s||"").split(/[,、]/).forEach(x=>{const m=x.match(/(\d+):(\d+)\s*[-~〜ー]\s*(\d+):(\d+)/);if(!m)return;const a=m[1]*60+ +m[2],b=m[3]*60+ +m[4];for(let i=0;i<N;i++){const t=S0+i*20;if(t<b&&t+20>a)r.add(i)}});return r};
+const hm=i=>{const t=S0+i*20;return Math.floor(t/60)+":"+String(t%60).padStart(2,"0")};
+function assign(){const out=[],w=[],ok=(s,p)=>!(p.ph=="急性期"&&s.noA)&&!(p.ph!="急性期"&&s.noR);
+DS.forEach(d=>{const ss=st.staff.filter(s=>!s.off&&s.team.startsWith(d)),ol=[];if(!ss.length)return;
+const tg=s=>+s.target||0,ld=s=>ol.filter(o=>o.s===s).reduce((n,o)=>n+o.u,0),key=s=>(ld(s)+ol.filter(o=>o.s===s).length*.01)/(tg(s)||1);
+[...st.pts].sort((a,b)=>(b.ph!="急性期")-(a.ph!="急性期")).forEach(p=>{const a=+p[d+"a"]||0,b=Math.max(a,+p[d+"b"]||0);if(!b)return;
+const el=ss.filter(x=>ok(x,p));if(!el.length){w.push(`${p.name}(${d}): ${p.ph}に入れる${d}スタッフがいません`);return}
+const f0=ss.find(x=>x.id==p[d+"s"]);if(f0&&!ok(f0,p))w.push(`${p.name}(${d}): 指定担当の${f0.name}は${p.ph}に入れないため自動で割り当てました`);
+let s=el.find(x=>x.id==p[d+"s"]);const fx=!!s;
+if(!s)s=el.reduce((m,x)=>key(x)<key(m)?x:m);ol.push({p,d,s,u:a,mx:b,fx})});
+ss.forEach(s=>{const grow=()=>{[1,0].forEach(r=>{let c=1;while(ld(s)<tg(s)&&c){c=0;ol.filter(o=>o.s===s&&(o.p.ph!="急性期")==!!r).forEach(o=>{if(ld(s)<tg(s)&&o.u<o.mx){o.u++;c=1}})}})};
+grow();
+[1,0].forEach(same=>{if(ld(s)<tg(s)){ol.filter(o=>!o.fx&&o.s!==s&&ok(s,o.p)&&(o.s.team==s.team)==!!same&&ld(o.s)>tg(o.s)).forEach(o=>{if(ld(s)<tg(s)){o.s=s;o.u=Math.max(o.u,1)}});grow()}})});
+out.push(...ol.filter(o=>o.u>0))});return{out,w}}
+function build(){const A=assign(),asg=A.out,g={},ps={},w=A.w,bl={};
+st.staff.forEach(s=>{g[s.id]=[];bl[s.id]=slots(s.block)});
+DS.forEach(d=>{if(st.pts.some(p=>+p[d+"b"]>0)&&!st.staff.some(s=>!s.off&&s.team.startsWith(d)))w.push(d+"の出勤スタッフがいません")});
+const av={};st.pts.forEach(p=>{ps[p.id]=[];const a=slots(p.meal);slots(p.ic).forEach(x=>a.add(x));if(String(p.bd).includes(WD[st.wd]))slots(p.bath).forEach(x=>a.add(x));av[p.id]=a});
+const fits=(o,i,m)=>{for(let k=i;k<i+m;k++)if(bl[o.s.id].has(k)||g[o.s.id][k]||av[o.p.id].has(k))return false;for(let k=i-2;k<i+m+2;k++)if(ps[o.p.id][k])return false;return true};
+asg.sort((a,b)=>((b.p.ph!="急性期")-(a.p.ph!="急性期"))||b.u-a.u).forEach(o=>{const n=Math.ceil(o.u/3);let got=0;
+for(let j=0;j<n;j++){const sz=Math.floor(o.u/n)+(j<o.u%n?1:0),ob={p:o.p,d:o.d};let ok=0;
+for(let m=sz;m>=1&&!ok;m--)for(let i=0;i+m<=N&&!ok;i++)if(fits(o,i,m)){for(let k=i;k<i+m;k++){g[o.s.id][k]=ob;ps[o.p.id][k]=1}ob.n=m;ok=m;got+=m}}
+o.got=got;if(got<o.u)w.push(`${o.p.name}(${o.d}・${o.s.name}): ${o.u-got}単位 配置できませんでした`);
+if(got<(+o.p[o.d+"a"]||0))w.push(`${o.p.name}(${o.d}): 最小単位を満たせていません`)});
+return{asg,g,w}}
+let run=build();
+function ed(l,i,k,v){st[l][i][k]=v;save();if(k=="team"||k=="ph")draw()}
+function inp(l,i,c){const v=st[l][i][c[0]],k=c[0];
+if(c[2]=="n")return`<input type=number min=0 value="${esc(v)}" oninput="ed('${l}',${i},'${k}',this.value)">`;
+if(c[2]=="c")return`<input type=checkbox ${v?"checked":""} onchange="ed('${l}',${i},'${k}',this.checked)">`;
+if(c[2]=="s")return`<select onchange="ed('${l}',${i},'${k}',this.value)">${c[3].map(o=>`<option ${o==v?"selected":""}>${o}</option>`).join("")}</select>`;
+if(c[2]=="S")return`<select onchange="ed('${l}',${i},'${k}',this.value)"><option value="">ー</option>${st.staff.filter(s=>s.team.startsWith(c[3])).map(s=>`<option value="${s.id}" ${s.id==v?"selected":""}>${esc(s.name)}</option>`).join("")}</select>`;
+return`<input class=n value="${esc(v)}" oninput="ed('${l}',${i},'${k}',this.value)">`}
+const PC=[["name","患者名"],["PTa","PT最小","n"],["PTb","PT最大","n"],["OTa","OT最小","n"],["OTb","OT最大","n"],["STa","ST最小","n"],["STb","ST最大","n"],["meal","食事(例 12:20-13:20)"],["ic","IC"],["bath","入浴時間"],["bd","入浴曜日(例 月木)"],["ph","期","s",["回復期","急性期"]],["cat","区分","s",["脳血管","整形","廃用"]],["PTs","担当PT","S","PT"],["OTs","担当OT","S","OT"],["STs","担当ST","S","ST"],["note","備考"]];
+const SC=[["name","名前"],["team","チーム","s",TEAMS],["off","休み","c"],["block","入れられない時間(例 12:00-13:00,15:00-15:40)"],["target","取得単位","n"],["noA","急性期不可","c"],["noR","回復期不可","c"]];
+function tbl(l,C,add,f,dv){const L=st[l];return`<div class=w><table><tr>${C.map(c=>`<th>${c[1]}</th>`).join("")}<th></th></tr>${L.map((x,i)=>f(x)?`<tr>${C.map(c=>`<td>${inp(l,i,c)}</td>`).join("")}<td><button onclick="del('${l}',${i})">削除</button></td></tr>`:"").join("")}</table></div><p><button onclick="add('${l}','${dv}')">${add}</button></p>`}
+function sec(l,C,defs){return defs.map(d=>`<h3>${d[0]}(${st[l].filter(d[1]).length})</h3>`+tbl(l,C,d[0]+"を追加",d[1],d[2])).join("")+`<p><button class=p onclick="upd()">更新</button></p>`}
+function add(l,d){const id=Math.max(0,...st[l].map(x=>x.id))+1;st[l].push(l=="pts"?P(id,"新患者",{ph:d}):{id,name:"新スタッフ",team:d,off:false,block:"12:00-13:00",target:d=="ST"?8:16,noA:false,noR:false});save();draw()}
+function del(l,i){st[l].splice(i,1);save();draw()}
+function selp(v){st.sel=st.sel==v?"":v;save();draw()}
+function ttv(){const v=st.view,cols=v=="全員"?st.staff:TEAMS.includes(v)?st.staff.filter(s=>s.team==v):st.staff.filter(s=>s.id==v);
+const sel=`<select onchange="st.view=this.value;save();draw()"><option>全員</option>${TEAMS.map(t=>`<option ${t==v?"selected":""}>${t}</option>`).join("")}${st.staff.map(s=>`<option value="${s.id}" ${s.id==v?"selected":""}>${esc(s.name)}(${s.team})</option>`).join("")}</select>`;
+const psel=`<select onchange="st.sel=this.value;save();draw()"><option value="">ー</option>${["回復期","急性期"].map(g=>`<optgroup label="${g}">${st.pts.filter(p=>(p.ph=="急性期")==(g=="急性期")).map(p=>`<option value="${p.id}" ${p.id==st.sel?"selected":""}>${esc(p.name)}</option>`).join("")}</optgroup>`).join("")}</select>`;
+const sp=st.pts.find(x=>x.id==st.sel),pc=[],cov=[];
+if(sp)st.staff.forEach(s=>{const gg=run.g[s.id];for(let i=0;i<N;i++){const c=gg[i];if(c&&c.p.id==sp.id&&gg[i-1]!==c)pc[i]={s,d:c.d,n:c.n}}});
+let h=`<p>表示: ${sel}　患者選択: ${psel}　<small style="display:inline">${WD[st.wd]}曜日 / 20分=1単位(セルをタップでも選択)</small></p><div class=w><table class=tt><tr><th></th>${sp?`<th>${esc(sp.name)}<small>${sp.ph}・選択患者</small></th>`:""}${cols.map(s=>`<th>${esc(s.name)}<small>${s.team}　${run.asg.filter(o=>o.s===s).reduce((n,o)=>n+(o.got||0),0)}/${s.target}単位</small></th>`).join("")}</tr>`;
+for(let i=0;i<N;i++){h+=`<tr><td class=t>${hm(i)}</td>`;if(sp){const q=pc[i];if(q){h+=`<td class="${q.d.toLowerCase()} hl" rowspan=${q.n}>${esc(q.s.name)}<small>${q.d} ${q.n*20}分</small></td>`;for(let k=1;k<q.n;k++)cov[i+k]=1}else if(!cov[i])h+="<td></td>"}cols.forEach(s=>{if(s.off){h+=i?"":`<td class=x rowspan=${N}>休み</td>`;return}
+const c=run.g[s.id][i];if(c){if(run.g[s.id][i-1]===c)return;h+=`<td class="${c.d.toLowerCase()}${c.p.id==st.sel?" hl":""}" rowspan=${c.n} onclick="selp(${c.p.id})">${esc(c.p.name)}<small>${c.d} ${c.n*20}分</small></td>`}else h+=`<td class="${slots(s.block).has(i)?"x":""}"></td>`});h+="</tr>"}
+return h+"</table></div>"}
+function lsv(){return st.staff.map(s=>{const a=run.asg.filter(o=>o.s===s);return`<h3>${esc(s.name)}(${s.team}) ${s.off?"休み":a.reduce((n,o)=>n+(o.got||0),0)+"/"+s.target+"単位"}</h3>`+(a.length?`<div class=w><table><tr><th>患者</th><th>単位</th><th>期</th><th>区分</th><th>備考</th></tr>${a.map(o=>`<tr class="${o.d.toLowerCase()}"><td>${esc(o.p.name)}</td><td>${o.got}</td><td>${o.p.ph}</td><td>${o.p.cat}</td><td>${esc(o.p.note)}</td></tr>`).join("")}</table></div>`:"<small>担当患者なし</small>")}).join("")}
+const TABS=[["tt","時間表"],["ls","担当一覧"],["f2","2F"],["f3","3F"],...TEAMS.map(t=>[t,t])];
+function draw(){if(!TABS.some(t=>t[0]==st.tab))st.tab="tt";const T=st.tab;
+document.getElementById("tabs").innerHTML=TABS.map(t=>`<button class="${T==t[0]?"on":""}" onclick="tab('${t[0]}')">${t[1]}</button>`).join(" ");
+document.getElementById("v").innerHTML=T=="tt"?ttv():T=="ls"?lsv():T=="f2"?sec("pts",PC,[["2F 急性期",p=>p.ph=="急性期","急性期"]]):T=="f3"?sec("pts",PC,[["3F 回復期",p=>p.ph!="急性期","回復期"]]):sec("staff",SC,[[T,s=>s.team==T,T]]);
+document.getElementById("msg").innerHTML=run.w.length?`<div class=warn>${run.w.map(esc).join("<br>")}</div>`:""}
+function tab(t){st.tab=t;save();draw()}
+function upd(){run=build();draw()}
+document.getElementById("wd").innerHTML=[...WD].map((c,i)=>`<option value=${i} ${i==st.wd?"selected":""}>${c}曜日</option>`).join("");
+
+function rows(){const v=st.view,cols=v=="全員"?st.staff:TEAMS.includes(v)?st.staff.filter(s=>s.team==v):st.staff.filter(s=>s.id==v);
+const R=[[WD[st.wd]+"曜日 時間表"],["時間",...cols.map(s=>`${s.name}(${s.team}) ${run.asg.filter(o=>o.s===s).reduce((n,o)=>n+(o.got||0),0)}/${s.target}単位`)]];
+for(let i=0;i<N;i++)R.push([hm(i),...cols.map(s=>{if(s.off)return"休み";const c=run.g[s.id][i];return c?`${c.p.name} ${c.d}`:slots(s.block).has(i)?"×":""})]);
+R.push([],["担当一覧"],["スタッフ","チーム","患者","職種","単位","期","区分","備考"]);
+st.staff.forEach(s=>run.asg.filter(o=>o.s===s&&o.got>0).forEach(o=>R.push([s.name,s.team,o.p.name,o.d,o.got,o.p.ph,o.p.cat,o.p.note])));
+if(run.w.length)R.push([],["警告"],...run.w.map(x=>[x]));return R}
+async function xp(m){run=build();draw();const R=rows();
+if(m){const t=R.map(r=>r.join("\t")).join("\n");try{await navigator.clipboard.writeText(t);alert("コピーしました。スプレッドシートに貼り付けてください")}catch(e){prompt("全選択してコピーしてください",t)}return}
+const csv="\uFEFF"+R.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+const dl=()=>dlf("リハビリ時間表.csv",csv,"text/csv");try{if(typeof claude=="undefined")return dl();const d=await claude.use("downloads");if(!d)return dl();await d.save({filename:"リハビリ時間表.csv",data:csv})}catch(e){if(e&&e.code=="declined")return;dl()}}
+function dlf(n,t,m){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;document.body.appendChild(a);a.click();a.remove()}
+function bk(){dlf("rehab-data.json",JSON.stringify(st),"application/json")}
+function rs(i){const f=i.files[0];if(!f)return;f.text().then(t=>{try{const
+d=JSON.parse(t);if(!Array.isArray(d.staff)||!Array.isArray(d.pts))throw 0;st=d;save();run=build();document.getElementById("wd").value=st.wd;draw()}catch(e){alert("読み込めないファイルです")}});i.value=""}
+draw();
+</script></body></html>
